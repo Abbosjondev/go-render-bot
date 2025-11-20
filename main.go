@@ -9,48 +9,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"time"
-
-	_ "github.com/lib/pq" // PostgreSQL drayveri
-)
-
-// Global baza o'zgaruvchisi
-var db *sql.DB
-
-type Update struct {
-	UpdateID int `json:"update_id"`
-	Message  struct {
-		Chat struct {
-			ID int64 `json:"id"`
-		} `json:"chat"`
-		Text string `json:"text"`
-		From struct {
-			Username string `json:"username"`
-		} `json:"from"`
-	} `json:"message"`
-}
-
-type SendMessageRequest struct {
-	ChatID int64  `json:"chat_id"`
-	Text   string `json:"text"`
-}
-
-func main() {
-	// 1. TOKENLARNI OLISH
-	token := os.Getenv("TELEGRAM_TOKEN")
-	dbURL := os.Getenv("DATABASE_URL") // Renderdan olamiz
-	port := os.Getenv("PORT")
-package main
-
-import (
-	"bytes"
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"log"
-	"math/rand"
-	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -87,12 +45,16 @@ func main() {
 	if token == "" || dbURL == "" {
 		log.Fatal("Environment variables yetishmayapti!")
 	}
-	if port == "" { port = "8080" }
+	if port == "" {
+		port = "8080"
+	}
 
 	// BAZAGA ULANISH
 	var err error
 	db, err = sql.Open("postgres", dbURL)
-	if err != nil { log.Fatal(err) }
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer db.Close()
 
 	// Connection Pool (Supabase Free uchun optimal)
@@ -103,8 +65,12 @@ func main() {
 	// WEBHOOK
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		var update Update
-		if err := json.NewDecoder(r.Body).Decode(&update); err != nil { return }
-		if update.Message.Text == "" { return }
+		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+			return
+		}
+		if update.Message.Text == "" {
+			return
+		}
 
 		chatID := update.Message.Chat.ID
 		text := update.Message.Text
@@ -137,12 +103,14 @@ func testSimpleSpeed(chatID int64, username string) string {
 	_, err := db.Exec(`
 		INSERT INTO users (id, username, balance) VALUES ($1, $2, $3)
 		ON CONFLICT (id) DO UPDATE SET updated_at = NOW()`, chatID, username, 0)
-	if err != nil { return fmt.Sprintf("Xato: %v", err) }
-	
+	if err != nil {
+		return fmt.Sprintf("Xato: %v", err)
+	}
+
 	// O'qish
 	var bal float64
 	db.QueryRow("SELECT balance FROM users WHERE id=$1", chatID).Scan(&bal)
-	
+
 	return fmt.Sprintf("🚀 BAZA TESTI NATIJASI:\n⏱ Vaqt: %v\n(Bu bir martalik so'rov tezligi)", time.Since(start))
 }
 
@@ -153,7 +121,7 @@ func runHeavyStressTest(token string, chatID int64) {
 
 	start := time.Now()
 	var wg sync.WaitGroup
-	
+
 	// Kanal orqali limitlash (Semaphore pattern)
 	sem := make(chan struct{}, concurrency)
 	errorsCount := 0
@@ -164,34 +132,34 @@ func runHeavyStressTest(token string, chatID int64) {
 		go func(idx int) {
 			defer wg.Done()
 			sem <- struct{}{} // Ruxsat olish
-			
+
 			// Og'irroq operatsiya: Transaction jadvaliga yozish
-			_, err := db.Exec(`INSERT INTO transactions (user_id, amount, description) VALUES ($1, $2, $3)`, 
+			_, err := db.Exec(`INSERT INTO transactions (user_id, amount, description) VALUES ($1, $2, $3)`,
 				chatID, rand.Float64()*10000, fmt.Sprintf("Stress test txn %d", idx))
-			
+
 			if err != nil {
 				mu.Lock()
 				errorsCount++
 				mu.Unlock()
 			}
-			
+
 			<-sem // Ruxsatni bo'shatish
 		}(i)
 	}
 
 	wg.Wait() // Hammasi tugashini kutamiz
 	duration := time.Since(start)
-	
+
 	// Natijani hisoblash
 	rps := float64(requestCount) / duration.Seconds()
 
 	report := fmt.Sprintf(
 		"💣 **STRESS TEST NATIJASI** 💣\n\n"+
-		"📊 Jami so'rovlar: %d ta\n"+
-		"⏱ Ketgan vaqt: %v\n"+
-		"⚡ **Tezlik (RPS): %.2f so'rov/sek**\n"+
-		"❌ Xatolar: %d ta\n\n"+
-		"Xulosa: Agar RPS > 100 bo'lsa, 50k foydalanuvchi uchun yetarli.",
+			"📊 Jami so'rovlar: %d ta\n"+
+			"⏱ Ketgan vaqt: %v\n"+
+			"⚡ **Tezlik (RPS): %.2f so'rov/sek**\n"+
+			"❌ Xatolar: %d ta\n\n"+
+			"Xulosa: Agar RPS > 100 bo'lsa, 50k foydalanuvchi uchun yetarli.",
 		requestCount, duration, rps, errorsCount,
 	)
 
