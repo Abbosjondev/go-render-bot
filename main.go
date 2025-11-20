@@ -10,7 +10,7 @@ import (
 
 func main() {
 	pref := tele.Settings{
-		Token:  os.Getenv("8301987866:AAH4o2k1giwNalyFLVR3Jz1ke3tqefdh7Tk"),
+		Token:  os.Getenv("TELEGRAM_TOKEN"),
 		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
 	}
 
