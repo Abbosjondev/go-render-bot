@@ -72,8 +72,16 @@ func main() {
 }
 
 // Javob yuborish funksiyasi (Sof HTTP so'rov)
+// Javob yuborish funksiyasi
 func sendMessage(token string, chatID int64, text string) {
-	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
+	// Agar kompyuterda maxsus API URL sozlangan bo'lsa, o'shani ishlatamiz.
+	// Aks holda haqiqiy Telegram ishlaydi.
+	baseURL := os.Getenv("TELEGRAM_API_URL")
+	if baseURL == "" {
+		baseURL = "https://api.telegram.org"
+	}
+
+	apiURL := fmt.Sprintf("%s/bot%s/sendMessage", baseURL, token)
 
 	reqBody := SendMessageRequest{
 		ChatID: chatID,
