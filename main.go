@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 )
 
 // Telegramdan keladigan xabar tuzilishi
