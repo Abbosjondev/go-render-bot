@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql" // <--- MySQL Drayveri
+	_ "github.com/go-sql-driver/mysql" // MySQL Drayveri
 )
 
 var db *sql.DB
@@ -37,19 +37,22 @@ type SendMessageRequest struct {
 
 func main() {
 	token := os.Getenv("TELEGRAM_TOKEN")
-	// MySQL DSN (Data Source Name) formati: user:password@tcp(host:port)/dbname
-	dbURL := os.Getenv("DATABASE_URL") 
+	dbURL := os.Getenv("DATABASE_URL")
 	port := os.Getenv("PORT")
 
 	if token == "" || dbURL == "" {
 		log.Fatal("Environment variables yetishmayapti!")
 	}
-	if port == "" { port = "8080" }
+	if port == "" {
+		port = "8080"
+	}
 
 	var err error
-	// Driver nomi "mysql" ga o'zgardi
+	// Driver nomi "mysql"
 	db, err = sql.Open("mysql", dbURL)
-	if err != nil { log.Fatal(err) }
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer db.Close()
 
 	// MySQL ulanish sozlamalari
@@ -57,20 +60,29 @@ func main() {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	// MySQLda jadval yaratib olaylik (Agar yo'q bo'lsa)
+	// Jadvallarni yaratish
 	createTables()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		var update Update
-		if err := json.NewDecoder(r.Body).Decode(&update); err != nil { return }
-		if update.Message.Text == "" { return }
+		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+			return
+		}
+		if update.Message.Text == "" {
+			return
+		}
 
 		chatID := update.Message.Chat.ID
 		text := update.Message.Text
-		user := update.Message.From.Username
+		user := update.Message.From.Username // <--- Mana shu o'zgaruvchi muammo edi
+
+		// Biz uni endi Logda ishlatamiz, shunda xato yo'qoladi
+		log.Printf("User: %s, Xabar: %s", user, text)
 
 		if text == "/start" {
-			sendMessage(token, chatID, "Salom! MySQL Testiga xush kelibsiz. /stress deb yozing.")
+			// User ismini xabarga qo'shamiz
+			msg := fmt.Sprintf("Salom %s! MySQL (TiDB) Testiga xush kelibsiz. /stress deb yozing.", user)
+			sendMessage(token, chatID, msg)
 		} else if text == "/stress" {
 			sendMessage(token, chatID, "⏳ MySQL Stress test boshlandi... (TiDB Cloud)")
 			go runHeavyStressTest(token, chatID)
@@ -82,7 +94,6 @@ func main() {
 }
 
 func createTables() {
-	// MySQL sintaksisi
 	queryUsers := `
 	CREATE TABLE IF NOT EXISTS users (
 		id BIGINT PRIMARY KEY,
@@ -90,7 +101,7 @@ func createTables() {
 		balance DECIMAL(10, 2),
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 	);`
-	
+
 	queryTxn := `
 	CREATE TABLE IF NOT EXISTS transactions (
 		id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -101,9 +112,13 @@ func createTables() {
 	);`
 
 	_, err := db.Exec(queryUsers)
-	if err != nil { log.Println("User table xato:", err) }
+	if err != nil {
+		log.Println("User table xato:", err)
+	}
 	_, err = db.Exec(queryTxn)
-	if err != nil { log.Println("Txn table xato:", err) }
+	if err != nil {
+		log.Println("Txn table xato:", err)
+	}
 }
 
 func runHeavyStressTest(token string, chatID int64) {
@@ -121,19 +136,20 @@ func runHeavyStressTest(token string, chatID int64) {
 		go func(idx int) {
 			defer wg.Done()
 			sem <- struct{}{}
-			
-			// MySQL uchun '?' belgisi ishlatiladi ($1 emas)
-			_, err := db.Exec(`INSERT INTO transactions (user_id, amount, description) VALUES (?, ?, ?)`, 
+
+			// MySQL sintaksisi: ? belgisi
+			_, err := db.Exec(`INSERT INTO transactions (user_id, amount, description) VALUES (?, ?, ?)`,
 				chatID, rand.Float64()*10000, fmt.Sprintf("MySQL test txn %d", idx))
-			
+
 			if err != nil {
 				mu.Lock()
 				errorsCount++
 				mu.Unlock()
-				// Xatoni logga chiqarish (debug uchun)
-				if errorsCount <= 5 { log.Println("MySQL Error:", err) }
+				if errorsCount <= 5 {
+					log.Println("MySQL Error:", err)
+				}
 			}
-			
+
 			<-sem
 		}(i)
 	}
@@ -144,10 +160,10 @@ func runHeavyStressTest(token string, chatID int64) {
 
 	report := fmt.Sprintf(
 		"🐬 **MySQL (TiDB) NATIJASI** 🐬\n\n"+
-		"📊 So'rovlar: %d ta\n"+
-		"⏱ Vaqt: %v\n"+
-		"⚡ **Tezlik (RPS): %.2f**\n"+
-		"❌ Xatolar: %d ta",
+			"📊 So'rovlar: %d ta\n"+
+			"⏱ Vaqt: %v\n"+
+			"⚡ **Tezlik (RPS): %.2f**\n"+
+			"❌ Xatolar: %d ta",
 		requestCount, duration, rps, errorsCount,
 	)
 	sendMessage(token, chatID, report)
